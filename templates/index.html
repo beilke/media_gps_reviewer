@@ -38,122 +38,108 @@
       </div>
       {% endif %} {% endwith %}
 
-      <!-- Tabbed Form: Upload CSV -->
+      <!-- Unified Input Pane: Scan Directory or Upload CSV (mutually exclusive, shared action button) -->
       <div class="card shadow-sm">
         <div class="card-body">
-          <ul class="nav nav-tabs mb-3" id="inputTab" role="tablist">
-            <li class="nav-item" role="presentation">
-              <button
-                class="nav-link active"
-                id="scan-tab"
-                data-bs-toggle="tab"
-                data-bs-target="#scanTabPane"
-                type="button"
-                role="tab"
-                aria-controls="scanTabPane"
-                aria-selected="true"
-              >
-                Scan Directory
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button
-                class="nav-link"
-                id="csv-tab"
-                data-bs-toggle="tab"
-                data-bs-target="#csvTabPane"
-                type="button"
-                role="tab"
-                aria-controls="csvTabPane"
-                aria-selected="false"
-              >
-                Upload CSV
-              </button>
-            </li>
-          </ul>
-          <div class="tab-content" id="inputTabContent">
-            <!-- Scan Directory Tab -->
-            <div
-              class="tab-pane fade show active"
-              id="scanTabPane"
-              role="tabpanel"
-              aria-labelledby="scan-tab"
-            >
-              <form id="scanForm">
-                <div class="mb-3">
-                  <label for="scan_directory" class="form-label"
-                    >Directory to Scan for Images</label
-                  >
-                  <input
-                    type="text"
-                    id="scan_directory"
-                    name="scan_directory"
-                    class="form-control"
-                    placeholder="e.g., C:\\Users\\YourName\\Pictures"
-                    required
-                  />
+          <form id="unifiedForm" method="POST" enctype="multipart/form-data">
+            <div class="row">
+              <div class="col-md-6 border-end">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="radio" name="inputMode" id="modeScan" value="scan" checked />
+                  <label class="form-check-label" for="modeScan">Scan Directory</label>
                 </div>
-                <div class="form-check mb-3">
-                  <input
-                    class="form-check-input"
-                    type="checkbox"
-                    value="1"
-                    id="findClosestGPS"
-                    name="findClosestGPS"
-                  />
-                  <label class="form-check-label" for="findClosestGPS">
-                    Find closest GPS metadata on an image with GPS within a time
-                    frame
-                  </label>
-                </div>
-                <div class="mb-3" id="timeFrameGroup" style="display: none">
-                  <label for="timeFrameHours" class="form-label"
-                    >Time frame (hours)</label
-                  >
-                  <input
-                    type="number"
-                    min="1"
-                    max="48"
-                    step="1"
-                    id="timeFrameHours"
-                    name="timeFrameHours"
-                    class="form-control"
-                    value="1"
-                  />
-                </div>
-                <button type="submit" class="btn btn-success w-100">
-                  Scan directory and Start Reviewing GPS
-                </button>
-              </form>
-              <div id="scanResult" class="mt-3"></div>
-            </div>
-            <!-- CSV Upload Tab -->
-            <div
-              class="tab-pane fade"
-              id="csvTabPane"
-              role="tabpanel"
-              aria-labelledby="csv-tab"
-            >
-              <form method="POST" enctype="multipart/form-data">
-                <div class="mb-3">
-                  <label for="csv_file" class="form-label">Select CSV File</label>
-                  <input
-                    type="file"
-                    name="csv_file"
-                    accept=".csv"
-                    required
-                    class="form-control"
-                  />
-                  <div class="form-text">
-                    CSV must contain 'path' column with full image paths
+                <div id="scanGroup">
+                  <div class="mb-3">
+                    <label for="scan_directory" class="form-label">
+                      Directory to Scan for Images
+                    </label>
+                    <input
+                      type="text"
+                      id="scan_directory"
+                      name="scan_directory"
+                      class="form-control"
+                      placeholder="e.g., C:\\Users\\YourName\\Pictures or /srv/images"
+                      required
+                    />
+                    <div class="form-text">
+                      Enter the full server path to the folder containing your images.
+                    </div>
+                  </div>
+                  <div class="form-check mb-2">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      value="1"
+                      id="showWithGPS"
+                      name="showWithGPS"
+                    />
+                    <label class="form-check-label" for="showWithGPS">
+                      Also show images that already have GPS
+                    </label>
+                  </div>
+                  <div class="form-check mb-3">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      value="1"
+                      id="findClosestGPS"
+                      name="findClosestGPS"
+                    />
+                    <label class="form-check-label" for="findClosestGPS">
+                      Find closest GPS metadata on an image with GPS within a time
+                      frame
+                    </label>
+                  </div>
+                  <div class="mb-3" id="timeFrameGroup" style="display: none">
+                    <label for="timeFrameHours" class="form-label"
+                      >Time frame (hours)</label
+                    >
+                    <input
+                      type="number"
+                      min="1"
+                      max="48"
+                      step="1"
+                      id="timeFrameHours"
+                      name="timeFrameHours"
+                      class="form-control"
+                      value="1"
+                    />
                   </div>
                 </div>
-                <button type="submit" class="btn btn-primary w-100">
+              </div>
+              <div class="col-md-6">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="radio" name="inputMode" id="modeCSV" value="csv" />
+                  <label class="form-check-label" for="modeCSV">Upload CSV</label>
+                </div>
+                <div id="csvGroup" class="">
+                  <div class="mb-3">
+                    <label for="csv_file" class="form-label">Select CSV File</label>
+                    <input
+                      type="file"
+                      name="csv_file"
+                      id="csv_file"
+                      accept=".csv"
+                      class="form-control"
+                      required
+                      disabled
+                    />
+                    <div class="form-text">
+                      CSV must contain 'path' column with full image paths
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="row mt-3">
+              <div class="col-12">
+                <button type="submit" class="btn btn-success w-100" id="unifiedActionBtn">
                   Start Reviewing GPS
                 </button>
-              </form>
+                <div id="scanResult" class="mt-3"></div>
+              </div>
             </div>
-          </div>
+          </form>
         </div>
       </div>
 
@@ -175,50 +161,100 @@
     <!-- Bootstrap JS (for alert dismiss) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-      // Handle Scan Directory form submission and show/hide time frame input
+      // Mutually exclusive enable/disable for scan/csv, shared action button
       document.addEventListener("DOMContentLoaded", function () {
-        const scanForm = document.getElementById("scanForm");
+        const modeScan = document.getElementById("modeScan");
+        const modeCSV = document.getElementById("modeCSV");
+        const scanGroup = document.getElementById("scanGroup");
+        const csvGroup = document.getElementById("csvGroup");
+        const scanDirectoryInput = document.getElementById("scan_directory");
+        const csvFileInput = document.getElementById("csv_file");
         const findClosestGPS = document.getElementById("findClosestGPS");
         const timeFrameGroup = document.getElementById("timeFrameGroup");
         const timeFrameHours = document.getElementById("timeFrameHours");
+        const unifiedForm = document.getElementById("unifiedForm");
+        const scanResult = document.getElementById("scanResult");
+
+        function updateMode() {
+          if (modeScan.checked) {
+            scanGroup.classList.remove("opacity-50", "pointer-events-none");
+            scanDirectoryInput.disabled = false;
+            document.getElementById("showWithGPS").disabled = false;
+            findClosestGPS.disabled = false;
+            timeFrameHours.disabled = !findClosestGPS.checked;
+            csvGroup.classList.add("opacity-50", "pointer-events-none");
+            csvFileInput.disabled = true;
+          } else {
+            scanGroup.classList.add("opacity-50", "pointer-events-none");
+            scanDirectoryInput.disabled = true;
+            document.getElementById("showWithGPS").disabled = true;
+            findClosestGPS.disabled = true;
+            timeFrameHours.disabled = true;
+            csvGroup.classList.remove("opacity-50", "pointer-events-none");
+            csvFileInput.disabled = false;
+          }
+        }
+
+        modeScan.addEventListener("change", updateMode);
+        modeCSV.addEventListener("change", updateMode);
+        updateMode();
+
         if (findClosestGPS) {
           findClosestGPS.addEventListener("change", function () {
             timeFrameGroup.style.display = this.checked ? "" : "none";
+            if (modeScan.checked) {
+              timeFrameHours.disabled = !this.checked;
+            }
           });
         }
-        if (scanForm) {
-          scanForm.addEventListener("submit", function (e) {
+
+        if (unifiedForm) {
+          unifiedForm.addEventListener("submit", function (e) {
             e.preventDefault();
-            const dir = document.getElementById("scan_directory").value.trim();
-            const findClosest = findClosestGPS.checked;
-            const timeFrame = findClosest
-              ? parseInt(timeFrameHours.value, 10)
-              : null;
-            const resultDiv = document.getElementById("scanResult");
-            resultDiv.innerHTML =
-              '<div class="text-center"><div class="spinner-border" role="status"></div> Scanning...</div>';
-            fetch("/scan_directory", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                directory: dir,
-                find_closest: findClosest,
-                time_frame: timeFrame,
-              }),
-            })
-              .then((res) => res.json())
-              .then((data) => {
-                if (data.status === "success" && data.redirect) {
-                  window.location.href = data.redirect;
-                } else if (data.status === "error") {
-                  resultDiv.innerHTML = `<div class='alert alert-danger'>${
-                    data.message || "Scan failed."
-                  }</div>`;
-                }
+            scanResult.innerHTML = "";
+            if (modeScan.checked) {
+              // Scan Directory mode
+              const directory = scanDirectoryInput.value.trim();
+              if (!directory) {
+                alert("Please enter a directory path to scan.");
+                return;
+              }
+              const findClosest = findClosestGPS.checked;
+              const timeFrame = findClosest ? parseInt(timeFrameHours.value, 10) : null;
+              const showWithGPS = document.getElementById("showWithGPS").checked;
+              scanResult.innerHTML =
+                '<div class="text-center"><div class="spinner-border" role="status"></div> Scanning...</div>';
+              fetch("/scan_directory", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  directory: directory,
+                  find_closest: findClosest,
+                  time_frame: timeFrame,
+                  show_with_gps: showWithGPS
+                }),
               })
-              .catch((err) => {
-                resultDiv.innerHTML = `<div class='alert alert-danger'>Error: ${err.message}</div>`;
-              });
+                .then((res) => res.json())
+                .then((data) => {
+                  if (data.status === "success" && data.redirect) {
+                    window.location.href = data.redirect;
+                  } else if (data.status === "error") {
+                    scanResult.innerHTML = `<div class='alert alert-danger'>${
+                      data.message || "Scan failed."
+                    }</div>`;
+                  }
+                })
+                .catch((err) => {
+                  scanResult.innerHTML = `<div class='alert alert-danger'>Error: ${err.message}</div>`;
+                });
+            } else {
+              // CSV Upload mode
+              if (!csvFileInput.files.length) {
+                alert("Please select a CSV file to upload.");
+                return;
+              }
+              unifiedForm.submit();
+            }
           });
         }
       });

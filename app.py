@@ -259,6 +259,20 @@ def scan_directory_with_closest(directory, time_frame=1):
             }
             print(f"[DEBUG] Entry for review: {entry}")
             entries.append(entry)
+        elif orig_gps and orig_gps != (0.0, 0.0):
+            # Already has GPS, will be included if show_with_gps is set (handled in scan_directory)
+            lat = orig_gps[0]
+            lon = orig_gps[1]
+            gps_source = 'original'
+            entry = {
+                'path': m['path'],
+                'datetime': m['datetime'].isoformat() if m['datetime'] else '',
+                'latitude': lat,
+                'longitude': lon,
+                'gps_source': gps_source
+            }
+            entry['__include_if_show_with_gps'] = True
+            entries.append(entry)
     print(f"[DEBUG] Total entries for review: {len(entries)}")
     return entries
 
@@ -484,24 +498,49 @@ class Reviewer:
         with open(csv_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
+                path = row.get('path', '')
+                dt = row.get('datetime', '')
+                lat = row.get('latitude', '')
+                lon = row.get('longitude', '')
+                gps_source = row.get('gps_source', '').lower() if row.get('gps_source') else ''
+
                 entry = {
-                    'path': row.get('path', ''),
-                    'datetime': row.get('datetime', ''),
+                    'path': path,
+                    'datetime': dt,
                     'latitude': '',
                     'longitude': '',
-                    'gps_source': 'manual'
+                    'gps_source': gps_source or 'manual'
                 }
-                image_path = entry['path']
-                if os.path.exists(image_path):
-                    exif_info = get_exif_data(image_path)
-                    if exif_info and 'GPSInfo' in exif_info:
-                        gps_info = exif_info['GPSInfo']
-                        if 'GPSLatitude' in gps_info and 'GPSLongitude' in gps_info:
-                            entry['latitude'] = str(gps_info['GPSLatitude'])
-                            entry['longitude'] = str(gps_info['GPSLongitude'])
-                            entry['gps_source'] = 'exif'
+
+                if gps_source == 'proxy':
+                    # Use CSV values for proxy
+                    entry['latitude'] = lat
+                    entry['longitude'] = lon
+                    entry['gps_source'] = 'proxy'
+                elif gps_source == 'original' or gps_source == 'exif':
+                    # Try to get from EXIF, fallback to CSV if not found
+                    if os.path.exists(path):
+                        exif_info = get_exif_data(path)
+                        if exif_info and 'GPSInfo' in exif_info:
+                            gps_info = exif_info['GPSInfo']
+                            if 'GPSLatitude' in gps_info and 'GPSLongitude' in gps_info:
+                                entry['latitude'] = str(gps_info['GPSLatitude'])
+                                entry['longitude'] = str(gps_info['GPSLongitude'])
+                                entry['gps_source'] = 'exif'
+                            else:
+                                entry['latitude'] = lat
+                                entry['longitude'] = lon
+                        else:
+                            entry['latitude'] = lat
+                            entry['longitude'] = lon
+                    else:
+                        print(f"Warning: Image not found at path: {path}")
+                        entry['latitude'] = lat
+                        entry['longitude'] = lon
                 else:
-                    print(f"Warning: Image not found at path: {image_path}")
+                    # Fallback: use CSV values
+                    entry['latitude'] = lat
+                    entry['longitude'] = lon
                 entries.append(entry)
         print(f"Loaded {len(entries)} entries from CSV")
         return cls(entries, csv_path=csv_path)
@@ -728,6 +767,17 @@ def review():
     # Get date taken or use unknown
     date_taken = exif_info.get('DateTimeOriginal', 'Unknown')
     
+    # Prepare GPS points for heatmap (list of [lat, lon])
+    gps_points = []
+    for e in reviewer.entries:
+        try:
+            lat = float(e.get('latitude', ''))
+            lon = float(e.get('longitude', ''))
+            if lat != 0.0 or lon != 0.0:
+                gps_points.append([lat, lon])
+        except Exception:
+            continue
+
     return render_template('review.html',
                          image_url=os.path.basename(static_image_path),
                          entry=entry,
@@ -738,7 +788,9 @@ def review():
                          latitude=latitude,
                          longitude=longitude,
                          file_location=os.path.abspath(image_path),
-                         exif_info=exif_info)
+                         exif_info=exif_info,
+                         all_entries=reviewer.entries,
+                         gps_points=gps_points)
 
 @app.route('/save_all', methods=['POST'])
 def save_all():
@@ -783,19 +835,145 @@ def geocode():
 def scan_directory():
     global reviewer
     data = request.get_json()
+    file_list = data.get('file_list')
     directory = data.get('directory')
+    find_closest = data.get('find_closest', False)
+    time_frame = data.get('time_frame', 1)
+    show_with_gps = data.get('show_with_gps', False)
+
+    # If file_list is provided (from folder picker), use it. Otherwise, fall back to directory scan.
+    if file_list and isinstance(file_list, list) and len(file_list) > 0:
+        # file_list contains relative paths (webkitRelativePath), but we need absolute paths
+        # Assume all files are under the same root (the first path's root)
+        # Try to reconstruct the root directory from the first file
+        first_path = file_list[0]
+        # Remove the relative part to get the root directory
+        # e.g. Edenred-100.jpg or subfolder/IMG_001.jpg
+        # The user selects a folder, so the files are relative to that folder
+        # We'll ask the user to upload from a known location, or try to resolve to static/uploads
+        # For now, try to join with UPLOAD_FOLDER
+        root_dir = app.config['UPLOAD_FOLDER']
+        abs_file_paths = [os.path.join(root_dir, rel_path) for rel_path in file_list]
+        print(f"[DEBUG] Received file_list with {len(abs_file_paths)} files. Root dir: {root_dir}")
+
+        # Only process files that exist
+        abs_file_paths = [f for f in abs_file_paths if os.path.exists(f)]
+        if not abs_file_paths:
+            return jsonify({'status': 'error', 'message': 'No valid files found in the selected directory.'}), 200
+
+        # Build media_files list as in scan_directory_for_media
+        media_files = []
+        for file_path in abs_file_paths:
+            if file_path.lower().endswith(('.jpg', '.jpeg')):
+                dt = get_media_datetime(file_path)
+                gps = get_media_gps(file_path)
+                print(f"[DEBUG] File: {file_path}\n  Datetime: {dt}\n  GPS: {gps}")
+                media_files.append({
+                    'path': file_path,
+                    'datetime': dt,
+                    'gps': gps
+                })
+
+        if find_closest:
+            # Use the same logic as scan_directory_with_closest, but only for the selected files
+            gps_files = [m for m in media_files if m['gps'] is not None and m['gps'] != (0.0, 0.0)]
+            print(f"[DEBUG] Reference files with valid GPS: {len(gps_files)}")
+            for media in media_files:
+                if (media['gps'] is None or media['gps'] == (0.0, 0.0)) and media['datetime'] is not None:
+                    print(f"[DEBUG] Looking for proxy GPS for: {media['path']}")
+                    proxy_gps = find_closest_gps(gps_files, media, time_frame)
+                    if proxy_gps and proxy_gps != (0.0, 0.0):
+                        print(f"[DEBUG] Assigned proxy GPS {proxy_gps} to {media['path']}")
+                        media['gps'] = proxy_gps
+                    else:
+                        print(f"[DEBUG] No proxy GPS assigned to {media['path']}")
+                        media['gps'] = None
+
+        entries = []
+        for m in media_files:
+            orig_gps = get_media_gps(m['path'])
+            if (not orig_gps or orig_gps == (0.0, 0.0)) and m['gps'] and m['gps'] != (0.0, 0.0):
+                lat = m['gps'][0]
+                lon = m['gps'][1]
+                gps_source = 'proxy' if find_closest else 'scan'
+                entry = {
+                    'path': m['path'],
+                    'datetime': m['datetime'].isoformat() if m['datetime'] else '',
+                    'latitude': lat,
+                    'longitude': lon,
+                    'gps_source': gps_source
+                }
+                print(f"[DEBUG] Entry for review: {entry}")
+                entries.append(entry)
+            elif orig_gps and orig_gps != (0.0, 0.0):
+                # Already has GPS, will be included if show_with_gps is set
+                lat = orig_gps[0]
+                lon = orig_gps[1]
+                gps_source = 'original'
+                entry = {
+                    'path': m['path'],
+                    'datetime': m['datetime'].isoformat() if m['datetime'] else '',
+                    'latitude': lat,
+                    'longitude': lon,
+                    'gps_source': gps_source
+                }
+                entry['__include_if_show_with_gps'] = True
+                entries.append(entry)
+
+        if not show_with_gps:
+            # Only keep proxy/scan entries
+            entries = [e for e in entries if e.get('gps_source') != 'original']
+        else:
+            # Remove marker key
+            for e in entries:
+                if '__include_if_show_with_gps' in e:
+                    del e['__include_if_show_with_gps']
+
+        if not entries:
+            return jsonify({'status': 'error', 'message': 'No images found for review.'}), 200
+        reviewer = Reviewer.from_entries(entries)
+        return jsonify({'status': 'success', 'redirect': url_for('review')}), 200
+
+    # Fallback: legacy directory scan
     if not directory or not os.path.isdir(directory):
         return jsonify({'status': 'error', 'message': 'Invalid or missing directory'}), 400
-
     try:
-        find_closest = data.get('find_closest', False)
-        time_frame = data.get('time_frame', 1)
         if find_closest:
             entries = scan_directory_with_closest(directory, time_frame)
+            if not show_with_gps:
+                entries = [e for e in entries if e.get('gps_source') == 'proxy']
+            else:
+                for e in entries:
+                    if '__include_if_show_with_gps' in e:
+                        del e['__include_if_show_with_gps']
         else:
-            entries = scan_directory_for_jpgs_without_gps_entries(directory)
+            media_files = scan_directory_for_media(directory)
+            entries = []
+            for m in media_files:
+                gps = m['gps']
+                dt = m['datetime']
+                if gps and gps != (0.0, 0.0):
+                    entry = {
+                        'path': m['path'],
+                        'datetime': dt.isoformat() if dt else '',
+                        'latitude': gps[0],
+                        'longitude': gps[1],
+                        'gps_source': 'original'
+                    }
+                    entries.append(entry)
+                else:
+                    entry = {
+                        'path': m['path'],
+                        'datetime': dt.isoformat() if dt else '',
+                        'latitude': '',
+                        'longitude': '',
+                        'gps_source': 'scan'
+                    }
+                    entries.append(entry)
+            if not show_with_gps:
+                entries = [e for e in entries if not e['latitude'] or not e['longitude']]
         if not entries:
-            return jsonify({'status': 'error', 'message': 'No images without GPS found.'}), 200
+            return jsonify({'status': 'error', 'message': 'No images found for review.'}), 200
         reviewer = Reviewer.from_entries(entries)
         return jsonify({'status': 'success', 'redirect': url_for('review')}), 200
     except Exception as e:

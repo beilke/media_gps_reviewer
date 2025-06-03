@@ -229,11 +229,44 @@
                 width: 180px;
             }
         }
+        #heatmapMap {
+            height: 600px; 
+            width: 100%;
+            border-radius: 8px;
+            background: #f0f0f0; /* visible if map fails to load */
+        }
     </style>
 </head>
 <body>
     <div class="container-fluid">
-        <h1 class="mb-4 text-center">Review GPS Data</h1>
+
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="text-center flex-grow-1">Review GPS Data</h1>
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-info" id="showHeatmapBtn" type="button">
+                    <i class="bi bi-graph-up"></i> Show Heatmap
+                </button>
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary ms-3">
+                    <i class="bi bi-arrow-left"></i> Back to Start
+                </a>
+            </div>
+        </div>
+    <!-- Heatmap Modal -->
+    <div class="modal fade" id="heatmapModal" tabindex="-1" aria-labelledby="heatmapModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="heatmapModalLabel">GPS Heatmap of Loaded Images</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="heatmapMap" style="height: 600px; width: 100%; border-radius: 8px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
 
         <!-- Enhanced Flash Messages -->
         <div class="flash-messages">
@@ -305,12 +338,20 @@
 
                         <!-- Coordinate Inputs -->
                         <div class="mb-3">
-                            <label for="latitude" class="form-label">Latitude</label>
-                            <input type="text" class="form-control" id="latitude" name="latitude" value="{{ entry.latitude }}" >
+                            <label for="latitude" class="form-label">Latitude
+                              {% if entry.gps_source == 'proxy' %}
+                                <span class="badge bg-warning text-dark ms-2" title="This is a suggested GPS value (proxy)">Suggested</span>
+                              {% endif %}
+                            </label>
+                            <input type="text" class="form-control {% if entry.gps_source == 'proxy' %}bg-warning-subtle border-warning fw-bold{% endif %}" id="latitude" name="latitude" value="{{ entry.latitude }}" {% if entry.gps_source == 'proxy' %}data-bs-toggle="tooltip" data-bs-title="This is a suggested GPS value (proxy)"{% endif %} >
                         </div>
                         <div class="mb-3">
-                            <label for="longitude" class="form-label">Longitude</label>
-                            <input type="text" class="form-control" id="longitude" name="longitude" value="{{ entry.longitude }}" >
+                            <label for="longitude" class="form-label">Longitude
+                              {% if entry.gps_source == 'proxy' %}
+                                <span class="badge bg-warning text-dark ms-2" title="This is a suggested GPS value (proxy)">Suggested</span>
+                              {% endif %}
+                            </label>
+                            <input type="text" class="form-control {% if entry.gps_source == 'proxy' %}bg-warning-subtle border-warning fw-bold{% endif %}" id="longitude" name="longitude" value="{{ entry.longitude }}" {% if entry.gps_source == 'proxy' %}data-bs-toggle="tooltip" data-bs-title="This is a suggested GPS value (proxy)"{% endif %} >
                         </div>
 
                         <!-- Action Buttons -->
@@ -354,13 +395,74 @@
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+    // Heatmap logic
+    document.getElementById('showHeatmapBtn').addEventListener('click', function() {
+    // Show modal first
+    var heatmapModal = new bootstrap.Modal(document.getElementById('heatmapModal'));
+    heatmapModal.show();
     
+    // Wait for modal to be fully shown before initializing map
+    document.getElementById('heatmapModal').addEventListener('shown.bs.modal', function() {
+        // Only initialize once
+        if (window.heatmapInitialized) return;
+        window.heatmapInitialized = true;
+
+        // Get all image GPS points
+        let gpsPoints = {{ gps_points|tojson }};
+        
+        // Filter out invalid points (just in case)
+        gpsPoints = gpsPoints.filter(pt => pt && pt.length === 2 && !isNaN(pt[0]) && !isNaN(pt[1]));
+
+        // Center map on the mean of all points, or fallback to [0,0]
+        let center = [0, 0];
+        if (gpsPoints.length > 0) {
+            let latSum = 0, lonSum = 0;
+            gpsPoints.forEach(pt => { 
+                latSum += pt[0]; 
+                lonSum += pt[1]; 
+            });
+            center = [latSum / gpsPoints.length, lonSum / gpsPoints.length];
+        }
+
+        // Initialize heatmap map
+        var heatmapMap = L.map('heatmapMap', {
+            preferCanvas: true  // Better for heatmap performance
+        }).setView(center, gpsPoints.length > 0 ? 8 : 2);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(heatmapMap);
+
+        if (gpsPoints.length > 0) {
+            var heat = L.heatLayer(gpsPoints, {
+                radius: 25, 
+                blur: 18, 
+                maxZoom: 12, 
+                minOpacity: 0.5,
+                max: 1.0  // Add max value to normalize intensities
+            }).addTo(heatmapMap);
+        } else {
+            heatmapMap.setView([0,0], 2);
+            console.warn("No valid GPS points available for heatmap");
+        }
+
+        // Clean up when modal closes
+        document.getElementById('heatmapModal').addEventListener('hidden.bs.modal', function() {
+            if (heatmapMap) {
+                heatmapMap.remove();
+                window.heatmapInitialized = false;
+            }
+        });
+    }, {once: true}); // Only run this once
+});
+</script>
     <!-- Leaflet Geocoder -->
     <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
-    
+    <!-- Leaflet.heat plugin (must be after Leaflet) -->
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
     <!-- Bootstrap JS Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script>
         // Initialize map
         const lat = parseFloat("{{ entry.latitude }}") || 0;
@@ -612,6 +714,13 @@
                 `;
             });
         }
+    </script>
+    <script>
+        // Enable Bootstrap tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
     </script>
 </body>
 </html>
