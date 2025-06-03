@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GPS Proxy Review Tool</title>    <!-- Bootstrap 5 CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body class="bg-light">
+    <div class="container py-5">
+      <h1 class="text-center mb-4 border-bottom pb-2 text-primary">
+        GPS Proxy Review Tool
+      </h1>
+
+      <!-- Flash Messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %} {% if
+      messages %}
+      <div class="mb-4">
+        {% for category, message in messages %}
+        <div
+          class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show"
+          role="alert"
+        >
+          {{ message }}
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="alert"
+            aria-label="Close"
+          ></button>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %} {% endwith %}
+
+      <!-- Unified Input Pane: Scan Directory or Upload CSV (mutually exclusive, shared action button) -->
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <form id="unifiedForm" method="POST" enctype="multipart/form-data">
+            <div class="row">
+              <div class="col-md-6 border-end">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="radio" name="inputMode" id="modeScan" value="scan" checked />
+                  <label class="form-check-label" for="modeScan">Scan Directory</label>
+                </div>
+                <div id="scanGroup">                  <div class="mb-3">
+                    <label for="scan_directory" class="form-label">
+                      Directory to Scan for Images
+                    </label>
+                    <div class="input-group">
+                      <input
+                        type="text"
+                        id="scan_directory"
+                        name="scan_directory"
+                        class="form-control"
+                        placeholder="e.g., C:\\Users\\YourName\\Pictures or /srv/images"
+                        required
+                      />                      <input 
+                        type="file" 
+                        id="directoryHelper" 
+                        webkitdirectory directory 
+                        multiple 
+                        style="display: none;"
+                      />                      <button 
+                        class="btn btn-outline-secondary" 
+                        type="button" 
+                        id="directoryBrowseBtn"
+                      >
+                        <i class="bi bi-folder2-open"></i> Browse...
+                      </button>
+                    </div>                    <div class="form-text">
+                      Enter the full server-side path to the folder containing your images, or click Browse to select from common locations.
+                    </div>
+                  </div>
+                  <div class="form-check mb-2">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      value="1"
+                      id="showWithGPS"
+                      name="showWithGPS"
+                    />
+                    <label class="form-check-label" for="showWithGPS">
+                      Also show images that already have GPS
+                    </label>
+                  </div>
+                  <div class="form-check mb-3">
+                    <input
+                      class="form-check-input"
+                      type="checkbox"
+                      value="1"
+                      id="findClosestGPS"
+                      name="findClosestGPS"
+                    />
+                    <label class="form-check-label" for="findClosestGPS">
+                      Find closest GPS metadata on an image with GPS within a time
+                      frame
+                    </label>
+                  </div>
+                  <div class="mb-3" id="timeFrameGroup" style="display: none">
+                    <label for="timeFrameHours" class="form-label"
+                      >Time frame (hours)</label
+                    >
+                    <input
+                      type="number"
+                      min="1"
+                      max="48"
+                      step="1"
+                      id="timeFrameHours"
+                      name="timeFrameHours"
+                      class="form-control"
+                      value="1"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="radio" name="inputMode" id="modeCSV" value="csv" />
+                  <label class="form-check-label" for="modeCSV">Upload CSV</label>
+                </div>
+                <div id="csvGroup" class="">
+                  <div class="mb-3">
+                    <label for="csv_file" class="form-label">Select CSV File</label>
+                    <input
+                      type="file"
+                      name="csv_file"
+                      id="csv_file"
+                      accept=".csv"
+                      class="form-control"
+                      required
+                      disabled
+                    />
+                    <div class="form-text">
+                      CSV must contain 'path' column with full image paths
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="row mt-3">
+              <div class="col-12">
+                <button type="submit" class="btn btn-success w-100" id="unifiedActionBtn">
+                  Start Reviewing GPS
+                </button>
+                <div id="scanResult" class="mt-3"></div>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>      <!-- Instructions -->
+      <div class="alert alert-info mt-4">
+        <h5 class="alert-heading">How to use:</h5>
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="scan-tab" data-bs-toggle="tab" data-bs-target="#scan-tab-pane" type="button" role="tab" aria-controls="scan-tab-pane" aria-selected="true">Directory Scan</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="csv-tab" data-bs-toggle="tab" data-bs-target="#csv-tab-pane" type="button" role="tab" aria-controls="csv-tab-pane" aria-selected="false">CSV Upload</button>
+          </li>
+        </ul>
+        <div class="tab-content pt-3" id="myTabContent">
+          <div class="tab-pane fade show active" id="scan-tab-pane" role="tabpanel" aria-labelledby="scan-tab">            <ol class="mb-0">
+              <li>Enter the <strong>full path</strong> to the directory containing your images</li>
+              <li>Optionally check "<strong>Also show images that already have GPS</strong>" to include all images</li>
+              <li>For proxy GPS suggestions, check "<strong>Find closest GPS metadata</strong>" and set time frame</li>
+              <li>Click "<strong>Start Reviewing GPS</strong>" to begin</li>
+              <li>Review each image and update coordinates as needed</li>
+              <li>Click the "<strong>Show Heatmap</strong>" button to visualize the geographic distribution of your images</li>
+              <li>The "<strong>Save All Changes</strong>" button will appear if proxy GPS values are assigned</li>
+            </ol>
+          </div>
+          <div class="tab-pane fade" id="csv-tab-pane" role="tabpanel" aria-labelledby="csv-tab">
+            <ol class="mb-0">              <li>
+                Upload a CSV file containing at minimum:
+                <ul>
+                  <li><code>path</code>: Full path to each image</li>
+                  <li><code>latitude</code>, <code>longitude</code>: Optional coordinates</li>
+                  <li><code>gps_source</code>: Optional source indicator (e.g., 'proxy')</li>
+                </ul>
+              </li>
+              <li>Review each image and update coordinates as needed</li>
+              <li>Click the "<strong>Show Heatmap</strong>" button to visualize the geographic distribution of all images</li>
+              <li>The "<strong>Save All Changes</strong>" button appears when proxy GPS values are present</li>
+            </ol>
+          </div>
+        </div>
+      </div>    </div>
+
+    <!-- Directory Selector Modal -->
+    <div class="modal fade" id="directorySelectorModal" tabindex="-1" aria-labelledby="directorySelectorModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="directorySelectorModalLabel">Select Directory Path</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label for="directoryPathInput" class="form-label">Enter the full path to your images directory:</label>
+              <input type="text" class="form-control" id="directoryPathInput" 
+                     oninput="document.getElementById('scan_directory').value = this.value">
+            </div>
+            
+            <div class="mb-3">
+              <label class="form-label">Common directories:</label>
+              <div class="list-group">
+                <button type="button" class="list-group-item list-group-item-action dir-example" data-path="C:\Users\Public\Pictures">
+                  <i class="bi bi-folder2"></i> Windows Public Pictures (C:\Users\Public\Pictures)
+                </button>
+                <button type="button" class="list-group-item list-group-item-action dir-example" data-path="C:\Users\{{ request.environ.get('USERNAME', 'YourUsername') }}\Pictures">
+                  <i class="bi bi-folder2"></i> Your Pictures folder
+                </button>
+                <button type="button" class="list-group-item list-group-item-action dir-example" data-path="/srv/images">
+                  <i class="bi bi-folder2"></i> Server Images (/srv/images)
+                </button>
+                <button type="button" class="list-group-item list-group-item-action dir-example" data-path="{{ request.environ.get('DOCUMENT_ROOT', '/var/www') }}/images">
+                  <i class="bi bi-folder2"></i> Web server images folder
+                </button>
+              </div>
+            </div>
+            
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle"></i> The path must be the complete server-side path where the application can access the files.
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="confirmPathBtn">Confirm Path</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap JS (for alert dismiss) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='scripts.js') }}"></script>
+  </body>
+</html>
