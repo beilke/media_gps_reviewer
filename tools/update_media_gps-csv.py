@@ -8,6 +8,10 @@ import pytz
 import csv
 import argparse
 import piexif
+from log_utils import setup_logger
+
+# Set up logger
+logger = setup_logger('update_media_gps_csv')
 
 # Allow loading of truncated images
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -50,7 +54,7 @@ def get_media_gps(file_path):
                     return None
                 return lat, lon
     except Exception as e:
-        print(f"Error extracting GPS from {file_path}: {e}")
+        logger.error(f"Error extracting GPS from {file_path}: {e}")
     return None
 
 
@@ -93,9 +97,9 @@ def scan_directory_for_media(directory, process_videos=False):
                         'gps': gps_data
                     })
                 except Exception as e:
-                    print(f"Error processing file {file_path}: {e}")
+                    logger.exception(f"Error processing file {file_path}")
             else:
-                print(f"Skipping unsupported file: {file_path}")
+                logger.debug(f"Skipping unsupported file: {file_path}")
     return media_files
 
 
@@ -141,6 +145,14 @@ def process_directory(directory, process_videos=False):
 
 def save_results(media_files, output_file):
     """Save only files needing GPS updates to a CSV file."""
+    # Ensure output goes to the data/csv directory
+    csv_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'csv')
+    os.makedirs(csv_dir, exist_ok=True)
+    
+    # If output_file is not an absolute path, place it in the CSV directory
+    if not os.path.isabs(output_file):
+        output_file = os.path.join(csv_dir, os.path.basename(output_file))
+    
     with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
         fieldnames = ['file_path', 'timestamp', 'latitude', 'longitude']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -168,10 +180,10 @@ def update_image_gps(image_path, lat, lon):
         }
         exif_dict["GPS"] = gps_ifd
         piexif.insert(piexif.dump(exif_dict), image_path)
-        print(f"Successfully updated GPS for image: {image_path}")
+        logger.info(f"Successfully updated GPS for image: {image_path}")
         return True
     except Exception as e:
-        print(f"Failed to update image GPS: {e}")
+        logger.error(f"Failed to update image GPS: {e}")
         return False
 
 
@@ -187,14 +199,14 @@ def update_video_gps(video_path, lat, lon):
         ]
         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if result.returncode != 0:
-            print(f"FFmpeg error: {result.stderr}")
+            logger.error(f"FFmpeg error: {result.stderr}")
             return False
 
         os.replace(temp_path, video_path)
-        print(f"Successfully updated GPS for video: {video_path}")
+        logger.info(f"Successfully updated GPS for video: {video_path}")
         return True
     except Exception as e:
-        print(f"Failed to update video GPS: {e}")
+        logger.error(f"Failed to update video GPS: {e}")
         if os.path.exists(temp_path):
             os.remove(temp_path)
         return False
@@ -225,13 +237,24 @@ def main():
 
     args = parser.parse_args()
 
+    logger.info(f"Starting {args.command} operation")
+    
     if args.command == 'extract':
+        logger.info(f"Scanning directory: {args.directory}")
         media_files = process_directory(args.directory, process_videos=args.process_videos)
         save_results(media_files, args.output)
-        print(f"Results saved to {args.output}")
+        logger.info(f"Results saved to {args.output}")
 
     elif args.command == 'update':
-        update_gps_from_csv(args.csv_file, args.directory, process_videos=args.process_videos)
+        # Normalize CSV path
+        csv_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'csv')
+        if not os.path.isabs(args.csv_file):
+            csv_path = os.path.join(csv_dir, os.path.basename(args.csv_file))
+        else:
+            csv_path = args.csv_file
+        
+        # TODO: Implement update_gps_from_csv function
+        logger.info(f"Update functionality not yet implemented. Would use CSV: {csv_path}")
 
 
 if __name__ == "__main__":

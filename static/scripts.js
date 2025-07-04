@@ -1,4 +1,4 @@
-// scripts.js - Unified JavaScript for the GPS Reviewer application
+// scripts.js - Unified JavaScript for the Picture GPS Reviewer application
 // Combines functionality from index.js, review.js, and review-page.js
 
 // =====================================
@@ -37,6 +37,29 @@ function updateSaveAllButtonVisibility() {
     console.log(`- Has Proxy GPS: ${hasProxyGps}`);
 }
 
+// Ensure hideWithGPS checkbox is unchecked by default
+function initializeFilterCheckboxes() {
+    const hideWithGPSCheckbox = document.getElementById('hideWithGPS');
+    if (hideWithGPSCheckbox) {
+        // Always ensure hideWithGPS is unchecked by default
+        hideWithGPSCheckbox.checked = false;
+        
+        // Setup time frame visibility based on findClosestGPS checkbox
+        const findClosestGPS = document.getElementById('findClosestGPS');
+        const timeFrameGroup = document.getElementById('timeFrameGroup');
+        
+        if (findClosestGPS && timeFrameGroup) {
+            // Set initial state
+            timeFrameGroup.style.display = findClosestGPS.checked ? 'block' : 'none';
+            
+            // Add event listener
+            findClosestGPS.addEventListener('change', function() {
+                timeFrameGroup.style.display = this.checked ? 'block' : 'none';
+            });
+        }
+    }
+}
+
 // =====================================
 // Directory browser helper
 // =====================================
@@ -58,6 +81,53 @@ function setupDirectoryBrowser() {
             
             // If modal exists, show it
             if (directoryModal) {
+                // Fetch and display available directories from data/photos
+                fetch('/get_photo_directories')
+                    .then(response => response.json())
+                    .then(data => {
+                        const directoriesContainer = document.getElementById('availableDirectories');
+                        
+                        if (data.directories && data.directories.length > 0) {
+                            // Clear loading spinner
+                            directoriesContainer.innerHTML = '';
+                            
+                            // Populate with available directories
+                            data.directories.forEach(dir => {
+                                const btn = document.createElement('button');
+                                btn.type = 'button';
+                                btn.className = 'list-group-item list-group-item-action';
+                                btn.innerHTML = `<i class="bi bi-folder2"></i> ${dir.name}`;
+                                btn.dataset.path = dir.path;
+                                
+                                btn.addEventListener('click', function() {
+                                    // Update the directory input with the selected path
+                                    document.getElementById('scan_directory').value = this.dataset.path;
+                                    
+                                    // Close the modal
+                                    directoryModal.hide();
+                                    
+                                    // Show success feedback
+                                    scanDirectoryInput.classList.add('is-valid');
+                                    setTimeout(() => scanDirectoryInput.classList.remove('is-valid'), 2000);
+                                });
+                                
+                                directoriesContainer.appendChild(btn);
+                            });
+                        } else {
+                            directoriesContainer.innerHTML = `
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle"></i> No photo directories found in data/photos.
+                                </div>`;
+                        }
+                    })
+                    .catch(error => {
+                        const directoriesContainer = document.getElementById('availableDirectories');
+                        directoriesContainer.innerHTML = `
+                            <div class="alert alert-danger">
+                                <i class="bi bi-exclamation-triangle"></i> Error loading directories: ${error.message}
+                            </div>`;
+                    });
+                
                 directoryModal.show();
             } else {
                 // Fallback to file input if modal isn't available
@@ -519,7 +589,10 @@ function initIndexPage() {
         if (modeScan.checked) {
             scanGroup.classList.remove("opacity-50", "pointer-events-none");
             scanDirectoryInput.disabled = false;
-            document.getElementById("showWithGPS").disabled = false;
+            const hideWithGPSCheckbox = document.getElementById("hideWithGPS");
+            hideWithGPSCheckbox.disabled = false;
+            // Ensure checkbox is unchecked by default
+            hideWithGPSCheckbox.checked = false;
             findClosestGPS.disabled = false;
             timeFrameHours.disabled = !findClosestGPS.checked;
             csvGroup.classList.add("opacity-50", "pointer-events-none");
@@ -527,7 +600,7 @@ function initIndexPage() {
         } else {
             scanGroup.classList.add("opacity-50", "pointer-events-none");
             scanDirectoryInput.disabled = true;
-            document.getElementById("showWithGPS").disabled = true;
+            document.getElementById("hideWithGPS").disabled = true;
             findClosestGPS.disabled = true;
             timeFrameHours.disabled = true;
             csvGroup.classList.remove("opacity-50", "pointer-events-none");
@@ -561,7 +634,7 @@ function initIndexPage() {
                 }
                 const findClosest = findClosestGPS.checked;
                 const timeFrame = findClosest ? parseInt(timeFrameHours.value, 10) : null;
-                const showWithGPS = document.getElementById("showWithGPS").checked;
+                const hideWithGPS = document.getElementById("hideWithGPS").checked;
                 scanResult.innerHTML =
                     '<div class="text-center"><div class="spinner-border" role="status"></div> Scanning...</div>';
                 fetch("/scan_directory", {
@@ -571,7 +644,7 @@ function initIndexPage() {
                         directory: directory,
                         find_closest: findClosest,
                         time_frame: timeFrame,
-                        show_with_gps: showWithGPS
+                        hide_with_gps: hideWithGPS
                     }),
                 })
                     .then((res) => res.json())
@@ -623,4 +696,7 @@ document.addEventListener("DOMContentLoaded", function () {
         // Enable tooltips (for proxy GPS indicators)
         enableBootstrapTooltips();
     }
+    
+    // Ensure filter checkboxes are initialized (hideWithGPS unchecked by default)
+    initializeFilterCheckboxes();
 });

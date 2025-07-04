@@ -1,4 +1,4 @@
-# GPS Media Reviewer
+# Picture GPS Reviewer
 
 A web application for reviewing and updating GPS metadata in your media files (images) using a CSV file and an interactive map interface.
 
@@ -7,19 +7,26 @@ A web application for reviewing and updating GPS metadata in your media files (i
 ## Features
 
 - **Two Input Modes**: 
-  - **Directory Scan**: Scan a directory for images with or without GPS metadata
+  - **Directory Scan**: Scan a directory for media files (images, HEIC, videos) with or without GPS metadata
   - **CSV Upload**: Import a CSV file listing your media files and their metadata
-- **EXIF GPS Extraction**: Automatically reads GPS data from image EXIF metadata
-- **Proxy GPS Suggestions**: Automatically finds and suggests GPS coordinates from other images taken at similar times
+- **Multi-Format Support**: 
+  - **Images**: JPG, JPEG, PNG, TIFF
+  - **HEIC/HEIF**: Apple's High Efficiency Image Format
+  - **Videos**: MP4, MOV, AVI, MKV
+- **EXIF GPS Extraction**: Automatically reads GPS data from media files' metadata
+- **Proxy GPS Suggestions**: Automatically finds and suggests GPS coordinates from other media files taken at similar times
 - **Interactive Map**: Review and update GPS coordinates visually using a map (Leaflet/OpenStreetMap)
 - **Heatmap Visualization**: View an interactive heatmap of all GPS coordinates in your dataset to identify location clusters and geographic distribution
 - **Address Search**: Search for locations by address and update coordinates via geocoding
-- **Bulk Save**: Save all changes to both the images' EXIF metadata and the CSV file
+- **Video Thumbnail Generation**: Automatically generates thumbnails for video files
+- **HEIC Conversion**: On-the-fly HEIC to JPEG conversion for preview
+- **Bulk Save**: Save all changes to both the media files' metadata and the CSV file
 - **Smart "Save All" Button**: Only appears when proxy GPS values are assigned and need review
 - **Progress Feedback**: See progress and results of bulk save operations
 - **Flash Messages**: Get feedback for actions and errors
-- **Backups**: Automatically creates backups of your original CSV and image files before making changes
-- **CSV Tools**: Includes scripts for finding images without GPS and for updating GPS in bulk from CSV
+- **Backups**: Automatically creates backups of your original CSV and media files before making changes
+- **CSV Tools**: Includes scripts for finding media files without GPS and for updating GPS in bulk from CSV
+- **Windows Long Path Support**: Handles paths longer than 260 characters on Windows systems
 
 ---
 
@@ -40,6 +47,104 @@ A web application for reviewing and updating GPS metadata in your media files (i
 1. **Select "Upload CSV" mode** and upload a CSV file containing at least a `path` column (full path to each image).
 2. **Review each image**: See the image, its metadata, and confirm or update the suggested GPS using the map or address search.
 3. **Save changes**: Update individual images as you go, or use the "Save All Changes" button to update all at once.
+
+---
+
+## Docker Deployment
+
+The application can be easily deployed using Docker, which ensures consistent behavior across different environments.
+
+### Using Docker Compose (Recommended)
+
+1. **Clone the repository**
+2. **Build and start the containers** using the provided script:
+
+```bash
+./start.sh
+```
+
+Or manually with:
+
+```bash
+docker-compose up -d
+```
+
+This will:
+- Build the Docker image for the application
+- Start the container in detached mode
+- Mount the data directories as volumes
+- Expose the application on port 5000
+
+3. **Access the application** at [http://localhost:5000](http://localhost:5000)
+
+4. **Stop the containers** when done with the provided script:
+
+```bash
+./stop.sh
+```
+
+Or manually with:
+
+```bash
+docker-compose down
+```
+
+### Data Persistence
+
+All your data is stored in the following directories, which are mounted as Docker volumes:
+
+- `./data/csv`: CSV files containing image metadata
+- `./data/log`: Log files for application activity
+- `./data/photos`: Your photo directories
+
+These directories are preserved between container restarts and even if you rebuild the container.
+
+### Using Tools in Docker
+
+To use the included tools like `find_aprox_gps_info.py` within the Docker container:
+
+```bash
+# Execute a command inside the running container
+docker exec -it picture_gps_reviewer python /app/tools/find_aprox_gps_info.py '/app/data/photos/your-folder' --output output.csv
+```
+
+#### Path Conversion Tool
+
+When working with Docker, Windows file paths need to be converted to Docker-compatible paths. Use the included path converter tool:
+
+```bash
+# Convert a Windows path to Docker path
+python tools/fix_file_paths.py "Z:\docker\projects\gps_reviewer\data\photos\your-folder"
+
+# Convert paths in a CSV file
+python tools/fix_file_paths.py "Z:\docker\projects\gps_reviewer\data\csv\your-file.csv"
+
+# Check if a video file can be processed by ffmpeg
+python tools/fix_file_paths.py "Z:\docker\projects\gps_reviewer\data\photos\videos\your-video.mp4" --check-video
+```
+
+This tool will:
+- Output the Docker-compatible path
+- Suggest the appropriate command to run inside the container
+- Check if video files are accessible by ffmpeg when using the --check-video option
+- Help identify issues with file paths, spaces, or special characters
+
+### Manual Docker Build
+
+If you prefer not to use Docker Compose, you can build and run the container manually:
+
+```bash
+# Build the Docker image
+docker build -t picture-gps-reviewer .
+
+# Run the container
+docker run -d -p 5000:5000 \
+  -v "$(pwd)/data/csv:/app/data/csv" \
+  -v "$(pwd)/data/log:/app/data/log" \
+  -v "$(pwd)/data/photos:/app/data/photos" \
+  --name picture_gps_reviewer \
+  picture-gps-reviewer
+```
 
 ---
 
@@ -138,7 +243,12 @@ pip install -r requirements.txt
 ## Notes
 
 - The app creates backups of your original CSV and image files before making changes.
-- Only images with supported formats (`jpg`, `jpeg`, `png`) are processed.
+- **Supported image formats**: 
+  - Standard formats: `jpg`, `jpeg`, `png`, `tiff` 
+  - Apple formats: `heic`, `heif` (requires pillow-heif)
+- **Supported video formats**: `mp4`, `mov`, `avi`, `mkv` (requires ffmpeg)
+- Video files show thumbnails in the review interface and provide a link to open the original video
+- HEIC files are automatically converted to JPEG for preview
 - The map uses OpenStreetMap and Leaflet for interactive location selection.
 - Address search uses OpenStreetMap Nominatim geocoding.
 - The "Save All Changes" button is intelligently shown only when:

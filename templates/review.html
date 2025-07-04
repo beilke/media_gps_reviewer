@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>GPS Review</title>
+    <title>Picture GPS Reviewer</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <!-- Bootstrap CSS -->
@@ -26,13 +26,22 @@
 
 
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="text-center flex-grow-1">Review GPS Data</h1>
+            <h1 class="text-center flex-grow-1">Picture GPS Reviewer</h1>
             <div class="d-flex align-items-center gap-2">
                 <button class="btn btn-info" id="showHeatmapBtn" type="button">
                     <i class="bi bi-graph-up"></i> Show Heatmap
                 </button>
-                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary ms-3">
-                    <i class="bi bi-arrow-left"></i> Back to Start
+                {% if source_type == 'csv' %}
+                <a href="{{ url_for('csv_list') }}" class="btn btn-outline-success ms-1">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> Back to CSV Files
+                </a>
+                {% else %}
+                <a href="{{ url_for('directory_list') }}" class="btn btn-outline-primary ms-1">
+                    <i class="bi bi-folder2-open"></i> Back to Directories
+                </a>
+                {% endif %}
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary ms-1">
+                    <i class="bi bi-arrow-left"></i> Back to Home
                 </a>
             </div>
         </div>
@@ -85,12 +94,43 @@
             <!-- Left Pane: Image + Metadata -->
             <div class="left-pane">
                 <div class="image-container">
-                    <img src="{{ url_for('static', filename='uploads/' + image_url) }}" alt="Image to review">
+                    <!-- Display based on media type -->
+                    {% if media_type == 'video' %}
+                        <!-- Video with thumbnail preview -->
+                        <div class="video-container">
+                            {% if thumbnail_path %}
+                            <img src="{{ url_for('serve_image', filepath=thumbnail_path) }}" alt="Video thumbnail" class="video-thumbnail">
+                            {% else %}
+                            <div class="no-thumbnail">
+                                <i class="bi bi-camera-video-fill"></i>
+                                <span>Video Preview Not Available</span>
+                            </div>
+                            {% endif %}
+                            <div class="video-info">
+                                <span class="badge bg-primary">Video</span>
+                                <a href="{{ file_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-play-circle"></i> Open Video
+                                </a>
+                            </div>
+                        </div>
+                    {% elif media_type == 'heic' %}
+                        <!-- HEIC image with converted preview -->
+                        <div class="heic-container">
+                            <img src="{{ url_for('serve_image', filepath=file_location) }}" alt="HEIC image">
+                            <div class="heic-info">
+                                <span class="badge bg-info">HEIC</span>
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- Standard image -->
+                        <img src="{{ url_for('serve_image', filepath=file_location) }}" alt="Image to review">
+                    {% endif %}
                     
                     <!-- Metadata Box -->
                     <div class="metadata-box">
                         <h5>Original Metadata</h5>
-                        <p><strong>Date Taken:</strong> {{ exif_info.get('DateTimeOriginal', 'Unknown') }}</p>
+                        <p><strong>Media Type:</strong> {{ media_type|upper }}</p>
+                        <p><strong>Date Taken:</strong> {{ date_taken }}</p>
                         <p><strong>Latitude:</strong> {{ exif_info.get('GPSLatitude', 'Unknown') }}</p>
                         <p><strong>Longitude:</strong> {{ exif_info.get('GPSLongitude', 'Unknown') }}</p>
                         <p><strong>File Path:</strong> {{ file_location }}</p>

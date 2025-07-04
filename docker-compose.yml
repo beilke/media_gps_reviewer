@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+  picture_gps_reviewer:
+    build: .
+    container_name: picture_gps_reviewer
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data/csv:/app/data/csv
+      - ./data/log:/app/data/log
+      - ./data/photos:/app/data/photos
+    environment:
+      - FLASK_ENV=production

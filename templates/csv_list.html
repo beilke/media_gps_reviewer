@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Picture GPS Reviewer - Available CSV Files</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <div class="container-fluid">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="text-center flex-grow-1">Picture GPS Reviewer - Available CSV Files</h1>
+        <div class="d-flex align-items-center gap-2">
+          <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Home
+          </a>
+        </div>
+      </div>
+
+      <!-- Enhanced Flash Messages -->
+      <div class="flash-messages">
+          {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                  {% for category, message in messages %}
+                      <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                          {% if category == 'success' %}
+                              <i class="bi bi-check-circle-fill"></i>
+                          {% elif category == 'danger' %}
+                              <i class="bi bi-exclamation-triangle-fill"></i>
+                          {% elif category == 'warning' %}
+                              <i class="bi bi-exclamation-octagon-fill"></i>
+                          {% elif category == 'info' %}
+                              <i class="bi bi-info-circle-fill"></i>
+                          {% else %}
+                              <i class="bi bi-info-circle-fill"></i>
+                          {% endif %}
+                          {{ message }}
+                          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                      </div>
+                  {% endfor %}
+              {% endif %}
+          {% endwith %}
+      </div>
+
+      <!-- CSV List Card -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header">
+          <h5 class="mb-0">
+            <i class="bi bi-file-earmark-spreadsheet"></i> Available CSV Files
+          </h5>
+        </div>
+        <div class="card-body">
+          {% if csv_files %}
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th>Filename</th>
+                  <th>Rows</th>
+                  <th>Size</th>
+                  <th>Last Modified</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for file in csv_files %}
+                <tr>
+                  <td><i class="bi bi-file-earmark-spreadsheet text-success me-2"></i> {{ file.name }}</td>
+                  <td>{{ file.row_count }} entries</td>
+                  <td>{{ (file.size / 1024)|round(1) }} KB</td>
+                  <td>{{ file.modified.strftime('%Y-%m-%d %H:%M') }}</td>
+                  <td>
+                    <a href="{{ url_for('load_csv', csv_filename=file.name) }}" class="btn btn-sm btn-primary">
+                      <i class="bi bi-cloud-arrow-down"></i> Load CSV
+                    </a>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No CSV files found in data/csv.
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Upload New CSV Card -->
+      <div class="card shadow-sm">
+        <div class="card-header">
+          <h5 class="mb-0"><i class="bi bi-upload"></i> Upload New CSV File</h5>
+        </div>
+        <div class="card-body">
+          <form method="POST" action="{{ url_for('index') }}" enctype="multipart/form-data" class="row g-3">
+            <div class="col-md-8">
+              <label for="csv_file" class="form-label">Select CSV File</label>
+              <input type="file" name="csv_file" id="csv_file" accept=".csv" class="form-control" required>
+              <div class="form-text">
+                CSV must contain 'path' column with full image paths
+              </div>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+              <button type="submit" class="btn btn-success w-100">
+                <i class="bi bi-upload"></i> Upload CSV
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- CSV Format Help -->
+      <div class="card shadow-sm mt-4">
+        <div class="card-header">
+          <h5 class="mb-0"><i class="bi bi-info-circle"></i> CSV Format Guide</h5>
+        </div>
+        <div class="card-body">
+          <p>Your CSV file should contain the following columns:</p>
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Column</th>
+                <th>Required</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>path</code></td>
+                <td><span class="badge bg-danger">Required</span></td>
+                <td>Full path to the image file</td>
+              </tr>
+              <tr>
+                <td><code>datetime</code></td>
+                <td><span class="badge bg-secondary">Optional</span></td>
+                <td>DateTime when the photo was taken (ISO format)</td>
+              </tr>
+              <tr>
+                <td><code>latitude</code></td>
+                <td><span class="badge bg-secondary">Optional</span></td>
+                <td>Latitude coordinate (decimal)</td>
+              </tr>
+              <tr>
+                <td><code>longitude</code></td>
+                <td><span class="badge bg-secondary">Optional</span></td>
+                <td>Longitude coordinate (decimal)</td>
+              </tr>
+              <tr>
+                <td><code>gps_source</code></td>
+                <td><span class="badge bg-secondary">Optional</span></td>
+                <td>Source of GPS data (e.g., 'original', 'proxy', 'manual')</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='scripts.js') }}"></script>
+  </body>
+</html>
