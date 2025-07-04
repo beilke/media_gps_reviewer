@@ -1,8 +1,22 @@
 # Data files
+data/csv/*
+data/log/*
+data/photos/*
+!data/csv/.gitkeep
+!data/log/.gitkeep
+!data/photos/.gitkeep
 *.csv
 results*.csv
 input.csv
 log.txt
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.dng
+*.mp4
+*.mov
+*.bak
 
 # Media files
 static/uploads/
